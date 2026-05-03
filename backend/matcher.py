@@ -2,7 +2,7 @@
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from skill_extractor import extract_skills
+from backend.skill_extractor import extract_skills
 
 def match_resume_to_job(resume_text, job_description):
     documents = [resume_text, job_description]

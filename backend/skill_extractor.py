@@ -1,7 +1,7 @@
 # skill_extractor.py
 
 import re
-from skills import SKILLS
+from backend.skills import SKILLS   # ✅ FIXED
 
 def extract_skills(text):
     text = text.lower()
