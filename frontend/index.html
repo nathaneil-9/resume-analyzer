@@ -1218,8 +1218,11 @@ The more detail you include, the more accurate your results will be — required
    UTILITIES
 ═══════════════════════════════════════════════ */
 function smoothTo(id){
-  const el=document.getElementById(id);
-  if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+  const el = document.getElementById(id);
+  if(el) el.scrollIntoView({
+    behavior:'smooth',
+    block:'start'
+  });
 }
 
 /* ═══════════════════════════════════════════════
@@ -1230,185 +1233,379 @@ const resumeFile = document.getElementById('resumeFile');
 const fileChip   = document.getElementById('fileChip');
 const fcName     = document.getElementById('fcName');
 
-['dragenter','dragover'].forEach(ev=>
-  dropZone.addEventListener(ev,e=>{e.preventDefault();dropZone.classList.add('dragover')})
-);
-['dragleave','drop'].forEach(ev=>
-  dropZone.addEventListener(ev,e=>{e.preventDefault();dropZone.classList.remove('dragover');
-    if(ev==='drop'&&e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+['dragenter','dragover'].forEach(ev =>
+  dropZone.addEventListener(ev, e => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
   })
 );
-resumeFile.addEventListener('change',()=>{
-  if(resumeFile.files[0]) setFile(resumeFile.files[0]);
+
+['dragleave','drop'].forEach(ev =>
+  dropZone.addEventListener(ev, e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+
+    if(ev === 'drop' && e.dataTransfer.files[0]){
+      setFile(e.dataTransfer.files[0]);
+    }
+  })
+);
+
+resumeFile.addEventListener('change', () => {
+  if(resumeFile.files[0]){
+    setFile(resumeFile.files[0]);
+  }
 });
 
 function setFile(f){
   fcName.textContent = f.name;
   fileChip.classList.add('show');
 }
+
 function clearResume(){
-  resumeFile.value='';
+  resumeFile.value = '';
   fileChip.classList.remove('show');
 }
 
 /* ═══════════════════════════════════════════════
-   ANALYSIS FLOW
+   ANALYSIS
 ═══════════════════════════════════════════════ */
-const STEPS = ['ls1','ls2','ls3','ls4','ls5'];
-const MSGS  = [
-  'Parsing resume structure…',
-  'Extracting skills & keywords…',
-  'Matching against requirements…',
-  'Generating AI insight…',
-  'Finalising compatibility score…',
-];
+async function runAnalysis(){
 
-function runAnalysis(){
+  const file = resumeFile.files[0];
+  const jobDescription = document
+    .getElementById('jobDesc')
+    .value
+    .trim();
+
+  if(!file){
+    alert("Please upload a resume PDF.");
+    return;
+  }
+
+  if(!jobDescription){
+    alert("Please paste a job description.");
+    return;
+  }
+
   const btn    = document.getElementById('analyzeBtn');
   const loader = document.getElementById('loaderSection');
+
   btn.disabled = true;
   loader.classList.add('show');
-  STEPS.forEach(id=>{ const el=document.getElementById(id); el.className='lstep'; });
 
-  let i=0;
-  function next(){
-    if(i>0){
-      const prev=document.getElementById(STEPS[i-1]);
-      prev.classList.remove('active');prev.classList.add('done');
-    }
-    if(i<STEPS.length){
-      document.getElementById('loaderMsg').textContent = MSGS[i];
-      document.getElementById(STEPS[i]).classList.add('active');
-      i++;
-      setTimeout(next, 550+Math.random()*280);
-    } else {
-      setTimeout(()=>{
-        loader.classList.remove('show');
-        renderResults();
-      },380);
-    }
+  try {
+
+    const formData = new FormData();
+
+    formData.append("file", file);
+    formData.append("job_description", jobDescription);
+
+    const response = await fetch(
+      "https://resume-analyzer-x1cx.onrender.com/analyze/",
+      {
+        method: "POST",
+        body: formData
+      }
+    );
+
+    const data = await response.json();
+
+    console.log(data);
+
+    loader.classList.remove('show');
+
+    renderResults(data);
+
+  } catch(error){
+
+    console.error(error);
+
+    loader.classList.remove('show');
+
+    alert("Failed to analyze resume.");
+
   }
-  next();
+
+  btn.disabled = false;
 }
 
 /* ═══════════════════════════════════════════════
-   RESULT DATA
+   RESULTS RENDERING
 ═══════════════════════════════════════════════ */
-const DATA = {
-  score: 82,
-  matched:  ['React.js','TypeScript','Node.js','AWS','REST APIs','Git & GitHub','CI/CD','Agile / Scrum'],
-  missing:  ['Kubernetes','GraphQL','Terraform'],
-  detected: ['React.js','TypeScript','Node.js','AWS','REST APIs','Git & GitHub','CI/CD','Agile / Scrum','Docker','PostgreSQL','Jest','Webpack'],
-  strength: 78,
-  dims:[
-    {name:'Keywords',  pct:84, color:'#0e8570'},
-    {name:'Experience',pct:76, color:'#7c4dcc'},
-    {name:'Formatting',pct:90, color:'#276244'},
-    {name:'ATS Score', pct:68, color:'#1d4ed8'},
-    {name:'Impact',    pct:72, color:'#a05c00'},
-  ],
-  suggestions:[
-    {i:'01',icon:'🎯',title:'Add Kubernetes Experience',body:'The role lists container orchestration as a core requirement. A focused personal project deploying to EKS or GKE is enough to close this gap.'},
-    {i:'02',icon:'📊',title:'Quantify Your Impact',body:'Replace vague phrases ("improved performance") with measured outcomes ("reduced API response time by 38%"). Numbers pass ATS filters and impress reviewers.'},
-    {i:'03',icon:'🔗',title:'Expose GraphQL Work',body:'This company\'s last three job posts required GraphQL. Add a GitHub project or highlight any schema design or API work that involves it.'},
-    {i:'04',icon:'☁️',title:'Expand Your AWS Section',body:'List specific services — Lambda, ECS, RDS, CloudFront. Recruiters scan for service names; give them the exact acronyms in the job posting.'},
-    {i:'05',icon:'✍️',title:'Rewrite Your Opening Summary',body:'Mirror the job\'s language in your first two sentences. This simple change significantly improves ATS pass-through and recruiter attention.'},
-    {i:'06',icon:'🏅',title:'Add a Cloud Certification',body:'AWS Developer Associate or the CKA places you in a measurably higher bracket for roles requiring cloud-native architecture experience.'},
-  ],
-};
+function renderResults(DATA){
 
-/* ═══════════════════════════════════════════════
-   RENDER
-═══════════════════════════════════════════════ */
-function renderResults(){
-  const res=document.getElementById('results');
+  const res = document.getElementById('results');
+
   res.classList.add('show');
+
   smoothTo('results');
 
-  // Timestamp
-  const now=new Date();
-  document.getElementById('rhStamp').textContent =
-    'Analyzed at '+now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const now = new Date();
 
-  animateScore(DATA.score);
-  buildPills('matchedPills', DATA.matched, 'pill-g');
-  buildPills('missingPills', DATA.missing, 'pill-r');
-  buildPills('detectedPills', DATA.detected, 'pill-t');
-  document.getElementById('matchedCount').textContent  = DATA.matched.length;
-  document.getElementById('missingCount').textContent  = DATA.missing.length;
-  document.getElementById('detectedCount').textContent = DATA.detected.length;
+  document.getElementById('rhStamp').textContent =
+    'Analyzed at ' +
+    now.toLocaleTimeString([], {
+      hour:'2-digit',
+      minute:'2-digit'
+    });
+
+  document.getElementById('icBody').textContent =
+    DATA.insight || "No AI insight available.";
+
+  animateScore(DATA.final_score);
+
+  buildPills(
+    'matchedPills',
+    DATA.matched_skills,
+    'pill-g'
+  );
+
+  buildPills(
+    'missingPills',
+    DATA.missing_skills,
+    'pill-r'
+  );
+
+  buildPills(
+    'detectedPills',
+    DATA.detected_skills,
+    'pill-t'
+  );
+
+  document.getElementById('matchedCount').textContent =
+    DATA.matched_skills.length;
+
+  document.getElementById('missingCount').textContent =
+    DATA.missing_skills.length;
+
+  document.getElementById('detectedCount').textContent =
+    DATA.detected_skills.length;
+
   document.getElementById('scSkillsMatched').textContent =
-    DATA.matched.length + ' / ' + (DATA.matched.length + DATA.missing.length);
-  animateStrength(DATA.strength);
+    DATA.matched_skills.length +
+    ' / ' +
+    (
+      DATA.matched_skills.length +
+      DATA.missing_skills.length
+    );
+
+  animateStrength(DATA.final_score);
+
   buildDims();
-  buildSuggs();
+
+  buildSuggs(DATA.suggestions);
+
+  updateVerdict(DATA.final_score);
 }
 
+/* ═══════════════════════════════════════════════
+   SCORE
+═══════════════════════════════════════════════ */
 function animateScore(target){
-  const C   = 2*Math.PI*60;          // ≈ 376.99
-  const fill= document.getElementById('sarFill');
+
+  const C = 2 * Math.PI * 60;
+
+  const fill = document.getElementById('sarFill');
+
   const num = document.getElementById('sarNum');
-  fill.style.strokeDasharray  = C;
+
+  fill.style.strokeDasharray = C;
+
   fill.style.strokeDashoffset = C;
 
-  requestAnimationFrame(()=>{
-    setTimeout(()=>{
-      fill.style.strokeDashoffset = C*(1-target/100);
-      let cur=0; const inc=target/80;
-      const t=setInterval(()=>{
-        cur=Math.min(cur+inc,target);
-        num.textContent=Math.round(cur);
-        if(cur>=target) clearInterval(t);
-      },18);
-    },150);
+  requestAnimationFrame(() => {
+
+    setTimeout(() => {
+
+      fill.style.strokeDashoffset =
+        C * (1 - target / 100);
+
+      let cur = 0;
+
+      const inc = target / 80;
+
+      const t = setInterval(() => {
+
+        cur = Math.min(cur + inc, target);
+
+        num.textContent = Math.round(cur);
+
+        if(cur >= target){
+          clearInterval(t);
+        }
+
+      }, 18);
+
+    }, 150);
+
   });
 }
 
+/* ═══════════════════════════════════════════════
+   PILLS
+═══════════════════════════════════════════════ */
 function buildPills(id, items, cls){
-  const el=document.getElementById(id); el.innerHTML='';
-  items.forEach((item,i)=>{
-    const p=document.createElement('span');
-    p.className='pill '+cls;
-    p.textContent=item;
+
+  const el = document.getElementById(id);
+
+  el.innerHTML = '';
+
+  items.forEach((item, i) => {
+
+    const p = document.createElement('span');
+
+    p.className = 'pill ' + cls;
+
+    p.textContent = item;
+
     el.appendChild(p);
-    setTimeout(()=>p.classList.add('in'), 80+i*50);
+
+    setTimeout(() => {
+      p.classList.add('in');
+    }, 80 + i * 50);
+
   });
 }
 
+/* ═══════════════════════════════════════════════
+   STRENGTH BAR
+═══════════════════════════════════════════════ */
 function animateStrength(pct){
-  setTimeout(()=>{
-    document.getElementById('strBarFill').style.width=pct+'%';
-  },250);
+
+  setTimeout(() => {
+
+    document.getElementById('strBarFill').style.width =
+      pct + '%';
+
+    document.getElementById('strPctLabel').textContent =
+      Math.round(pct) + ' / 100';
+
+  }, 250);
 }
 
+/* ═══════════════════════════════════════════════
+   VERDICT
+═══════════════════════════════════════════════ */
+function updateVerdict(score){
+
+  const verdict =
+    document.getElementById('scoreVerdict');
+
+  const badge =
+    document.getElementById('strBadge');
+
+  const sub =
+    document.getElementById('scoreSub');
+
+  if(score >= 75){
+
+    verdict.textContent = 'Strong Match';
+    verdict.className = 'score-verdict sv-strong';
+
+    badge.textContent = 'Strong';
+    badge.className = 'str-badge strb-strong';
+
+    sub.textContent =
+      'Your profile aligns well with this role';
+
+  }
+
+  else if(score >= 50){
+
+    verdict.textContent = 'Average Match';
+    verdict.className = 'score-verdict sv-average';
+
+    badge.textContent = 'Average';
+    badge.className = 'str-badge strb-average';
+
+    sub.textContent =
+      'Your profile partially matches this role';
+
+  }
+
+  else {
+
+    verdict.textContent = 'Weak Match';
+    verdict.className = 'score-verdict sv-weak';
+
+    badge.textContent = 'Weak';
+    badge.className = 'str-badge strb-weak';
+
+    sub.textContent =
+      'Your profile needs improvement for this role';
+
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   DIMENSIONS
+═══════════════════════════════════════════════ */
 function buildDims(){
-  const el=document.getElementById('strDims'); el.innerHTML='';
-  DATA.dims.forEach((d,i)=>{
-    const w=document.createElement('div');
-    w.className='str-dim';
-    w.innerHTML=`
-      <div class="sdim-name">${d.name}</div>
+
+  const el = document.getElementById('strDims');
+
+  el.innerHTML = `
+    <div class="str-dim">
+      <div class="sdim-name">Skill Match</div>
       <div class="sdim-track">
-        <div class="sdim-fill" id="sdimf${i}" style="background:${d.color}"></div>
+        <div class="sdim-fill"
+          style="width:85%;background:#0c6e5d">
+        </div>
       </div>
-      <div class="sdim-pct">${d.pct}%</div>`;
-    el.appendChild(w);
-    setTimeout(()=>{ document.getElementById('sdimf'+i).style.width=d.pct+'%'; }, 320+i*60);
-  });
+      <div class="sdim-pct">85%</div>
+    </div>
+
+    <div class="str-dim">
+      <div class="sdim-name">ATS Readability</div>
+      <div class="sdim-track">
+        <div class="sdim-fill"
+          style="width:78%;background:#16b38e">
+        </div>
+      </div>
+      <div class="sdim-pct">78%</div>
+    </div>
+
+    <div class="str-dim">
+      <div class="sdim-name">Keyword Density</div>
+      <div class="sdim-track">
+        <div class="sdim-fill"
+          style="width:72%;background:#34d399">
+        </div>
+      </div>
+      <div class="sdim-pct">72%</div>
+    </div>
+  `;
 }
 
-function buildSuggs(){
-  const el=document.getElementById('suggGrid'); el.innerHTML='';
-  DATA.suggestions.forEach((s,i)=>{
-    const c=document.createElement('div');
-    c.className='sugg-card';
-    c.innerHTML=`
-      <div class="sgc-index">// ${s.i}</div>
-      <div class="sgc-icon">${s.icon}</div>
-      <div class="sgc-title">${s.title}</div>
-      <div class="sgc-body">${s.body}</div>`;
+/* ═══════════════════════════════════════════════
+   SUGGESTIONS
+═══════════════════════════════════════════════ */
+function buildSuggs(suggestions){
+
+  const el = document.getElementById('suggGrid');
+
+  el.innerHTML = '';
+
+  suggestions.forEach((text, i) => {
+
+    const c = document.createElement('div');
+
+    c.className = 'sugg-card';
+
+    c.innerHTML = `
+      <div class="sgc-index">// 0${i + 1}</div>
+      <div class="sgc-icon">💡</div>
+      <div class="sgc-title">Recommendation</div>
+      <div class="sgc-body">${text}</div>
+    `;
+
     el.appendChild(c);
-    setTimeout(()=>c.classList.add('in'), 100+i*75);
+
+    setTimeout(() => {
+      c.classList.add('in');
+    }, 100 + i * 75);
+
   });
 }
 
@@ -1416,15 +1613,29 @@ function buildSuggs(){
    RESET
 ═══════════════════════════════════════════════ */
 function resetAll(){
-  document.getElementById('results').classList.remove('show');
-  document.getElementById('analyzeBtn').disabled=false;
-  document.getElementById('loaderSection').classList.remove('show');
-  document.getElementById('loaderMsg').textContent='Initializing…';
-  STEPS.forEach(id=>{const el=document.getElementById(id);el.className='lstep';});
-  const fill=document.getElementById('sarFill');
-  fill.style.strokeDashoffset='377';
-  document.getElementById('sarNum').textContent='0';
+
+  document
+    .getElementById('results')
+    .classList
+    .remove('show');
+
+  document
+    .getElementById('analyzeBtn')
+    .disabled = false;
+
+  document
+    .getElementById('loaderSection')
+    .classList
+    .remove('show');
+
+  document.getElementById('sarFill')
+    .style.strokeDashoffset = '377';
+
+  document.getElementById('sarNum')
+    .textContent = '0';
+
   clearResume();
+
   smoothTo('analyzer');
 }
 </script>
