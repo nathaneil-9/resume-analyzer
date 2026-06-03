@@ -725,7 +725,7 @@
     fd.append('job_description', jdInput.value.trim());
 
     try {
-      const res = await fetch('http://127.0.0.1:8001/analyze/', { method: 'POST', body: fd });
+      const res = await fetch('https://resume-analyzer-api-pru9.onrender.com', { method: 'POST', body: fd });
       if (!res.ok) throw new Error(`Server responded with ${res.status}`);
       const data = await res.json();
       renderResults(data);
